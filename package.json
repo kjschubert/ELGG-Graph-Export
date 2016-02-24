@@ -1,6 +1,6 @@
 {
   "name": "ELGG2GEXF",
-  "version": "0.0.0",
+  "version": "0.1",
   "description": "Export the elgg database into an GEXF file as batch job",
   "main": "index.js",
   "scripts": {
@@ -23,5 +23,11 @@
   "bugs": {
     "url": "https://github.com/kjschubert/ELGG2GEXF/issues"
   },
-  "homepage": "https://github.com/kjschubert/ELGG2GEXF"
+  "homepage": "https://github.com/kjschubert/ELGG2GEXF",
+  "dependencies": {
+    "mysql": "~2.10.2",
+    "tmp": "0.0.28",
+    "concat-files": "~0.1.0",
+    "xml-escape": "~1.0.0"
+  }
 }
