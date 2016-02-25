@@ -13,13 +13,15 @@ The following database entries will be exported as nodes:
 - All Metadata objects which are only found in the system log
 - All Annotations from the table annotations
 - All Annotations which are only found in the system log
+- All Access Collections
 
 The following database entries will be exported as edges:
 - All Relationships from the table entity_relationships, Edge Label is the attribute relationship
-- The ElggEntities attributes site_guid (in_site), owner_guid (owns), container_guid (contains)
-- All events from the system log, Edge Label is the attribute event
+- The ElggEntities attributes site_guid (in_site), owner_guid (owns), container_guid (contains), access_id (is accessable)
+- All events (except for relationships) from the system log, Edge Label is the attribute event
 - For Metadata: has_metadata, owns_metadata
 - For Annotations: has_annotation, owns_annotation
+- For Access Collections own_access and in_site
 
 ## Working with Gephi
 Gephi doesn't support parallel edges with different labels and will merge these edges. When importing the Graph you can choose how to merge the weight (sum, min, max, average).
