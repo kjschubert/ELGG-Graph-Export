@@ -1,14 +1,14 @@
 {
-  "name": "ELGG2GEXF",
-  "version": "0.1.0",
-  "description": "Export the elgg database into an GEXF file as batch job",
+  "name": "ELGG-Graph-Export",
+  "version": "0.2.0",
+  "description": "Export the elgg database into an GEXF file and sepearte csv files as batch job",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/kjschubert/ELGG2GEXF.git"
+    "url": "https://github.com/kjschubert/ELGG-Graph-Export.git"
   },
   "keywords": [
     "elgg",
@@ -18,12 +18,12 @@
     "network",
     "analytics"
   ],
-  "author": "Karl Johann Schubert <karljohann@familieschubi.de>",
-  "license": "none",
+  "author": "Karl Johann Schubert <mail@kjschubert.de>",
+  "license": "CC BY-SA 4.0",
   "bugs": {
-    "url": "https://github.com/kjschubert/ELGG2GEXF/issues"
+    "url": "https://github.com/kjschubert/ELGG-Graph-Export/issues"
   },
-  "homepage": "https://github.com/kjschubert/ELGG2GEXF",
+  "homepage": "https://github.com/kjschubert/ELGG-Graph-Export",
   "dependencies": {
     "mysql": "~2.10.2",
     "tmp": "0.0.28",

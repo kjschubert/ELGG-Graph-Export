@@ -14,10 +14,16 @@ var status = {
     'header'    : false,
     'nodes'     : false,
     'deadnodes' : false,
+    'meta_nodes': false,
+    'anno_nodes': false,
+    'deadmeta'  : false,
+    'deadanno'  : false,
     'middle'    : false,
     'edges1'    : false,
     'edges2'    : false,
     'edges3'    : false,
+    'meta_edges': false,
+    'anno_edges': false,
     'footer'    : false
 };
 
@@ -40,7 +46,9 @@ csv_nodes.on("open", function() {
 });
 
 function resume() {
-    // generate nodes and node based edges
+    /**
+     * generate nodes and node based edges
+     */
     tmp.file(function _tempFileCreated(err, path_nodes, fd_nodes, cleanupCallback) {
         if (err) throw err;
 
@@ -100,7 +108,9 @@ function resume() {
         });
     });
 
-    // generate relationship edges
+    /**
+     * generate relationship edges
+     */
     tmp.file(function _tempFileCreated(err, path, fd, cleanupCallback) {
         var edges = fs.createWriteStream(null, {fd: fd});
         edges.on("finish", function() {
@@ -129,7 +139,9 @@ function resume() {
             });
     });
 
-    // find deleted (dead) nodes
+    /**
+     * find deleted (dead) entities in system log
+     */
     tmp.file(function _tempFileCreated(err, path, fd, cleanupCallback) {
         var nodes = fs.createWriteStream(null, {fd: fd});
         nodes.on("finish", function() {
@@ -158,14 +170,16 @@ function resume() {
             });
     });
 
-    // generate edges from system log
+    /**
+     * generate edges from system log
+     */
     tmp.file(function _tempFileCreated(err, path, fd, cleanupCallback) {
         var edges = fs.createWriteStream(null, {fd: fd});
         edges.on("finish", function() {
             status.edges3 = path;
         });
 
-        var query = connection.query("SELECT COUNT(*) AS weight, `performed_by_guid`, `object_id`, `event` FROM `" + config.db.prefix + "system_log` WHERE `event` NOT IN ('" + config.skip_events.join("', '") + "') AND `performed_by_guid` != 0 AND `object_type` IN ('object', 'user', 'group', 'site') GROUP BY `performed_by_guid`, `object_id`, `event`");
+        var query = connection.query("SELECT COUNT(*) AS weight, `performed_by_guid`, `object_id`, `event`, `object_type` FROM `" + config.db.prefix + "system_log` WHERE `event` NOT IN ('" + config.skip_events.join("', '") + "') AND `performed_by_guid` != 0 GROUP BY `performed_by_guid`, `object_type`, `object_id`, `event`");
         query
             .on('error', function (err) {
                 throw err;
@@ -173,8 +187,12 @@ function resume() {
             .on('result', function (row) {
                 connection.pause();
 
-                var edge_xml = '<edge id="' + parseInt(row.performed_by_guid) + '_' + xmlescape(row.event) + '_' + parseInt(row.object_id) + '" source="' + parseInt(row.performed_by_guid) + '" target="' + parseInt(row.object_id) + '" weight="' + parseInt(row.weight) + '" label="' + xmlescape(row.event) + '"><attvalues><attvalue for="0" value="' + xmlescape(row.event) + '"/></attvalues></edge>';
-                var edge_csv = '"' + parseInt(row.performed_by_guid) + '_' + row.event.replace('"', "''") + '_' + parseInt(row.object_id) + '";"' + parseInt(row.performed_by_guid) + '";"' + parseInt(row.object_id) + '";"directed";"' + row.event.replace('"', "''") + '";"' + parseInt(row.weight) + '";"' + row.event.replace('"', "''") + '"\n';
+                var target = parseInt(row.object_id);
+                if(row.object_type == "annotation") target = "annotation_" + target;
+                else if(row.object_type == "metadata") target = "meta_" + target;
+
+                var edge_xml = '<edge id="' + parseInt(row.performed_by_guid) + '_' + xmlescape(row.event) + '_' + target + '" source="' + parseInt(row.performed_by_guid) + '" target="' + target + '" weight="' + parseInt(row.weight) + '" label="' + xmlescape(row.event) + '"><attvalues><attvalue for="0" value="' + xmlescape(row.event) + '"/></attvalues></edge>';
+                var edge_csv = '"' + parseInt(row.performed_by_guid) + '_' + row.event.replace('"', "''") + '_' + target + '";"' + parseInt(row.performed_by_guid) + '";"' + target + '";"directed";"' + row.event.replace('"', "''") + '";"' + parseInt(row.weight) + '";"' + row.event.replace('"', "''") + '"\n';
 
                 edges.write(edge_xml, 'utf-8', function () {
                     csv_edges.write(edge_csv, 'utf-8', function() {
@@ -184,6 +202,166 @@ function resume() {
             })
             .on('end', function () {
                 edges.end();
+            });
+    });
+
+    /**
+     * generate metadata nodes and metadata edges
+     */
+    tmp.file(function _tempFileCreated(err, path_nodes, fd_nodes, cleanupCallback) {
+        var nodes = fs.createWriteStream(null, {fd: fd_nodes});
+        nodes.on("finish", function() {
+            status.meta_nodes = path_nodes;
+        });
+
+        tmp.file(function _tempFileCreated(err, path_edges, fd_edges, cleanupCallback) {
+            var edges = fs.createWriteStream(null, {fd: fd_edges});
+            edges.on("finish", function () {
+                status.meta_edges = path_edges;
+            });
+
+            var query = connection.query("SELECT `metadata`.`id`, `metadata`.`entity_guid`, `metadata`.`owner_guid`, `name`.`string` AS name, `value`.`string` as value FROM " + config.db.prefix + "metadata metadata LEFT JOIN " + config.db.prefix + "metastrings name ON `name`.`id`=`metadata`.`name_id` LEFT JOIN " + config.db.prefix + "metastrings value ON `value`.`id`=`metadata`.`value_id` WHERE `metadata`.`owner_guid`!=0 AND `metadata`.`entity_guid`!=0");
+            query
+                .on('error', function (err) {
+                    throw err;
+                })
+                .on('result', function (row) {
+                    connection.pause();
+
+                    var node_xml = '<node id="meta_' + parseInt(row.id) + '" label="' + xmlescape(row.name) + '=' + xmlescape(row.value) + '"><attvalues><attvalue for="0" value="Metadata"/><attvalue for="1" value="Metadata for Entity ' + parseInt(row.entity_guid) + '"/></attvalues></node>';
+                    var node_csv = '"meta_' + parseInt(row.id) + '";"' + row.name.replace('"', "''") + '=' + row.value.replace('"', "''") + '";"Metadata";"Metadata for Entity ' + parseInt(row.entity_guid) + '"\n';
+
+                    nodes.write(node_xml, 'utf-8', function () {
+                        csv_nodes.write(node_csv, 'utf-8', function() {
+                            var edges_xml = '<edge id="' + parseInt(row.entity_guid) + '_has_metadata_' + parseInt(row.id) + '" source="' + parseInt(row.entity_guid) + '" target="meta_' + parseInt(row.id) + '" weight="1" label="has_metadata"><attvalues><attvalue for="0" value="has_metadata"/></attvalues></edge>';
+                            edges_xml += '<edge id="' + parseInt(row.owner_guid) + '_owns_metadata_' + parseInt(row.id) + '" source="' + parseInt(row.owner_guid) + '" target="meta_' + parseInt(row.id) + '" weight="1" label="owns_metadata"><attvalues><attvalue for="0" value="owns_metadata"/></attvalues></edge>';
+                            var edges_csv = '"' + parseInt(row.entity_guid) + '_has_metadata_' + parseInt(row.id) + '";"' + parseInt(row.entity_guid) + '";"meta_' + parseInt(row.id) + '";"directed";"has_metadata";"1";"has_metadata"\n';
+                            edges_csv += '"' + parseInt(row.owner_guid) + '_owns_metadata_' + parseInt(row.id) + '";"' + parseInt(row.owner_guid) + '";"meta_' + parseInt(row.id) + '";"directed";"owns_metadata";"1";"owns_metadata"\n';
+
+                            edges.write(edges_xml, 'utf-8', function () {
+                                csv_edges.write(edges_csv, 'utf-8', function () {
+                                    connection.resume();
+                                });
+                            });
+
+                        });
+                    });
+                })
+                .on('end', function () {
+                    edges.end();
+                    nodes.end();
+                });
+        });
+    });
+
+    /**
+     * generate annotation nodes and annotation edges
+     */
+    tmp.file(function _tempFileCreated(err, path_nodes, fd_nodes, cleanupCallback) {
+        var nodes = fs.createWriteStream(null, {fd: fd_nodes});
+        nodes.on("finish", function() {
+            status.anno_nodes = path_nodes;
+        });
+
+        tmp.file(function _tempFileCreated(err, path_edges, fd_edges, cleanupCallback) {
+            var edges = fs.createWriteStream(null, {fd: fd_edges});
+            edges.on("finish", function () {
+                status.anno_edges = path_edges;
+            });
+
+            var query = connection.query("SELECT `annotation`.`id`, `annotation`.`entity_guid`, `annotation`.`owner_guid`, `name`.`string` AS name, `value`.`string` as value FROM " + config.db.prefix + "annotations annotation LEFT JOIN " + config.db.prefix + "metastrings name ON `name`.`id`=`annotation`.`name_id` LEFT JOIN " + config.db.prefix + "metastrings value ON `value`.`id`=`annotation`.`value_id`");
+            query
+                .on('error', function (err) {
+                    throw err;
+                })
+                .on('result', function (row) {
+                    connection.pause();
+
+                    var node_xml = '<node id="annotation_' + parseInt(row.id) + '" label="' + xmlescape(row.name) + '"><attvalues><attvalue for="0" value="Annotation"/><attvalue for="1" value="' + xmlescape(row.value) + '"/></attvalues></node>';
+                    var node_csv = '"annotation_' + parseInt(row.id) + '";"' + row.name.replace('"', "''") + '";"Annotation";"' + row.value.replace('"', "''") + '"\n';
+
+                    nodes.write(node_xml, 'utf-8', function () {
+                        csv_nodes.write(node_csv, 'utf-8', function() {
+                            var edges_xml = '<edge id="' + parseInt(row.entity_guid) + '_has_annotation_' + parseInt(row.id) + '" source="' + parseInt(row.entity_guid) + '" target="annotation_' + parseInt(row.id) + '" weight="1" label="has_annotation"><attvalues><attvalue for="0" value="has_annotation"/></attvalues></edge>';
+                            edges_xml += '<edge id="' + parseInt(row.owner_guid) + '_owns_annotation_' + parseInt(row.id) + '" source="' + parseInt(row.owner_guid) + '" target="annotation_' + parseInt(row.id) + '" weight="1" label="owns_annotation"><attvalues><attvalue for="0" value="owns_annotation"/></attvalues></edge>';
+                            var edges_csv = '"' + parseInt(row.entity_guid) + '_has_annotation_' + parseInt(row.id) + '";"' + parseInt(row.entity_guid) + '";"annotation_' + parseInt(row.id) + '";"directed";"has_annotation";"1";"has_annotation"\n';
+                            edges_csv += '"' + parseInt(row.owner_guid) + '_owns_annotation_' + parseInt(row.id) + '";"' + parseInt(row.owner_guid) + '";"annotation_' + parseInt(row.id) + '";"directed";"owns_annotation";"1";"owns_annotation"\n';
+
+                            edges.write(edges_xml, 'utf-8', function () {
+                                csv_edges.write(edges_csv, 'utf-8', function () {
+                                    connection.resume();
+                                });
+                            });
+
+                        });
+                    });
+                })
+                .on('end', function () {
+                    edges.end();
+                    nodes.end();
+                });
+        });
+    });
+
+    /**
+     * find deleted (dead) metadata nodes in system log
+     */
+    tmp.file(function _tempFileCreated(err, path, fd, cleanupCallback) {
+        var nodes = fs.createWriteStream(null, {fd: fd});
+        nodes.on("finish", function() {
+            status.deadmeta = path;
+        });
+
+        var query = connection.query("SELECT DISTINCT CONCAT('metadata_', `system_log`.`object_id`) AS id, `system_log`.`object_type` FROM " + config.db.prefix + "system_log system_log LEFT JOIN " + config.db.prefix + "metadata meta ON `system_log`.`object_id`=`meta`.`id` WHERE `meta`.`id` IS NULL AND `system_log`.`object_type`='metadata'");
+        query
+            .on('error', function (err) {
+                throw err;
+            })
+            .on('result', function (row) {
+                connection.pause();
+
+                var node_xml = '<node id="' + xmlescape(row.id) + '" label="Deleted Metadata"><attvalues><attvalue for="0" value="metadata"/><attvalue for="1" value="This object was deleted and only found in the system log"/></attvalues></node>';
+                var node_csv = '"' + row.id.replace('"', "''") + '";"Deleted Metadata";"metadata";"This object was deleted and only found in the system log"\n';
+
+                nodes.write(node_xml, 'utf-8', function () {
+                    csv_nodes.write(node_csv, 'utf-8', function() {
+                        connection.resume();
+                    });
+                });
+            })
+            .on('end', function () {
+                nodes.end();
+            });
+    });
+
+    /**
+     * find deleted (dead) annotation nodes in system log
+     */
+    tmp.file(function _tempFileCreated(err, path, fd, cleanupCallback) {
+        var nodes = fs.createWriteStream(null, {fd: fd});
+        nodes.on("finish", function() {
+            status.deadanno = path;
+        });
+
+        var query = connection.query("SELECT DISTINCT CONCAT('annotation_', `system_log`.`object_id`) AS id, `system_log`.`object_type` FROM " + config.db.prefix + "system_log system_log LEFT JOIN " + config.db.prefix + "annotations annotations ON `system_log`.`object_id`=`annotations`.`id` WHERE `annotations`.`id` IS NULL AND `system_log`.`object_type`='annotation'");
+        query
+            .on('error', function (err) {
+                throw err;
+            })
+            .on('result', function (row) {
+                connection.pause();
+
+                var node_xml = '<node id="' + xmlescape(row.id) + '" label="Deleted Annotation"><attvalues><attvalue for="0" value="annotation"/><attvalue for="1" value="This object was deleted and only found in the system log"/></attvalues></node>';
+                var node_csv = '"' + row.id.replace('"', "''") + '";"Deleted Annotation";"annotation";"This object was deleted and only found in the system log"\n';
+
+                nodes.write(node_xml, 'utf-8', function () {
+                    csv_nodes.write(node_csv, 'utf-8', function() {
+                        connection.resume();
+                    });
+                });
+            })
+            .on('end', function () {
+                nodes.end();
             });
     });
 }
