@@ -11,20 +11,22 @@ connection.connect();
 
 // data structure for progress status
 var status = {
-    'header'    : false,
-    'nodes'     : false,
-    'deadnodes' : false,
-    'meta_nodes': false,
-    'anno_nodes': false,
-    'deadmeta'  : false,
-    'deadanno'  : false,
-    'middle'    : false,
-    'edges1'    : false,
-    'edges2'    : false,
-    'edges3'    : false,
-    'meta_edges': false,
-    'anno_edges': false,
-    'footer'    : false
+    'header'       : false,
+    'nodes'        : false,
+    'deadnodes'    : false,
+    'meta_nodes'   : false,
+    'anno_nodes'   : false,
+    'deadmeta'     : false,
+    'deadanno'     : false,
+    'access_nodes' : false,
+    'middle'       : false,
+    'edges1'       : false,
+    'edges2'       : false,
+    'edges3'       : false,
+    'meta_edges'   : false,
+    'anno_edges'   : false,
+    'access_edges' : false,
+    'footer'       : false
 };
 
 var csv_nodes = fs.createWriteStream('./elgg_nodes.csv');
@@ -64,7 +66,7 @@ function resume() {
                 status.edges1 = path_edges;
             });
 
-            var query = connection.query("SELECT DISTINCT entities.guid, COALESCE(entity_subtypes.subtype, entities.type) AS type, entities.owner_guid, entities.site_guid, entities.container_guid, COALESCE(NULLIF(objects_entity.title, ''), users_entity.username, NULLIF(groups_entity.name, ''), NULLIF(sites_entity.name, ''), 'Untitled') AS title, COALESCE(NULLIF(objects_entity.description, ''), CONCAT('The userprofile of ', users_entity.name), NULLIF(groups_entity.description, ''), NULLIF(sites_entity.description, ''), 'No description available') AS description FROM " + config.db.prefix + "entities entities LEFT JOIN " + config.db.prefix + "entity_subtypes entity_subtypes ON entities.subtype = entity_subtypes.id LEFT JOIN " + config.db.prefix + "objects_entity objects_entity ON objects_entity.guid = entities.guid LEFT JOIN " + config.db.prefix + "users_entity users_entity ON users_entity.guid = entities.guid LEFT JOIN " + config.db.prefix + "groups_entity groups_entity ON groups_entity.guid = entities.guid LEFT JOIN " + config.db.prefix + "sites_entity sites_entity ON sites_entity.guid = entities.guid");
+            var query = connection.query("SELECT DISTINCT entities.guid, COALESCE(entity_subtypes.subtype, entities.type) AS type, entities.owner_guid, entities.site_guid, entities.container_guid, entities.access_id, COALESCE(NULLIF(objects_entity.title, ''), users_entity.username, NULLIF(groups_entity.name, ''), NULLIF(sites_entity.name, ''), 'Untitled') AS title, COALESCE(NULLIF(objects_entity.description, ''), CONCAT('The userprofile of ', users_entity.name), NULLIF(groups_entity.description, ''), NULLIF(sites_entity.description, ''), 'No description available') AS description FROM " + config.db.prefix + "entities entities LEFT JOIN " + config.db.prefix + "entity_subtypes entity_subtypes ON entities.subtype = entity_subtypes.id LEFT JOIN " + config.db.prefix + "objects_entity objects_entity ON objects_entity.guid = entities.guid LEFT JOIN " + config.db.prefix + "users_entity users_entity ON users_entity.guid = entities.guid LEFT JOIN " + config.db.prefix + "groups_entity groups_entity ON groups_entity.guid = entities.guid LEFT JOIN " + config.db.prefix + "sites_entity sites_entity ON sites_entity.guid = entities.guid");
             query
                 .on('error', function (err) {
                     throw err;
@@ -92,6 +94,8 @@ function resume() {
                                 edges_xml += '<edge id="' + parseInt(row.owner_guid) + '_owns_' + parseInt(row.guid) + '" source="' + parseInt(row.owner_guid) + '" target="' + parseInt(row.guid) + '" label="owns"><attvalues><attvalue for="0" value="owns"/></attvalues></edge>';
                                 edges_csv += '"' + parseInt(row.owner_guid) + '_owns_' + parseInt(row.guid) + '";"' + parseInt(row.owner_guid) + '";"' + parseInt(row.guid) + '";"directed";"owns";"1.0";"owns"\n';
                             }
+                            edges_xml += '<edge id="' + parseInt(row.guid) + '_accessable_by_access_' + parseInt(row.access_id) + '" source="' + parseInt(row.guid) + '" target="access_' + parseInt(row.access_id) + '" label="accessable_by"><attvalues><attvalue for="0" value="accessable by"/></attvalues></edge>';
+                            edges_csv += '"' + parseInt(row.guid) + '_accessable_by_access_' + parseInt(row.access_id) + '";"' + parseInt(row.guid) + '";"access_' + parseInt(row.access_id) + '";"directed";"accessable_by";"1.0";"accessable by"\n';
 
                             edges.write(edges_xml, 'utf-8', function() {
                                 csv_edges.write(edges_csv, 'utf-8', function() {
@@ -179,7 +183,7 @@ function resume() {
             status.edges3 = path;
         });
 
-        var query = connection.query("SELECT COUNT(*) AS weight, `performed_by_guid`, `object_id`, `event`, `object_type` FROM `" + config.db.prefix + "system_log` WHERE `event` NOT IN ('" + config.skip_events.join("', '") + "') AND `performed_by_guid` != 0 GROUP BY `performed_by_guid`, `object_type`, `object_id`, `event`");
+        var query = connection.query("SELECT COUNT(*) AS weight, `performed_by_guid`, `object_id`, `event`, `object_type` FROM `" + config.db.prefix + "system_log` WHERE `event` NOT IN ('" + config.skip_events.join("', '") + "') AND `performed_by_guid` != 0 AND `object_type`!='relationship' GROUP BY `performed_by_guid`, `object_type`, `object_id`, `event`");
         query
             .on('error', function (err) {
                 throw err;
@@ -220,7 +224,7 @@ function resume() {
                 status.meta_edges = path_edges;
             });
 
-            var query = connection.query("SELECT `metadata`.`id`, `metadata`.`entity_guid`, `metadata`.`owner_guid`, `name`.`string` AS name, `value`.`string` as value FROM " + config.db.prefix + "metadata metadata LEFT JOIN " + config.db.prefix + "metastrings name ON `name`.`id`=`metadata`.`name_id` LEFT JOIN " + config.db.prefix + "metastrings value ON `value`.`id`=`metadata`.`value_id` WHERE `metadata`.`owner_guid`!=0 AND `metadata`.`entity_guid`!=0");
+            var query = connection.query("SELECT `metadata`.`id`, `metadata`.`entity_guid`, `metadata`.`owner_guid`, `metadata`.`access_id`, `name`.`string` AS name, `value`.`string` as value FROM " + config.db.prefix + "metadata metadata LEFT JOIN " + config.db.prefix + "metastrings name ON `name`.`id`=`metadata`.`name_id` LEFT JOIN " + config.db.prefix + "metastrings value ON `value`.`id`=`metadata`.`value_id` WHERE `metadata`.`owner_guid`!=0 AND `metadata`.`entity_guid`!=0");
             query
                 .on('error', function (err) {
                     throw err;
@@ -235,8 +239,10 @@ function resume() {
                         csv_nodes.write(node_csv, 'utf-8', function() {
                             var edges_xml = '<edge id="' + parseInt(row.entity_guid) + '_has_metadata_' + parseInt(row.id) + '" source="' + parseInt(row.entity_guid) + '" target="meta_' + parseInt(row.id) + '" weight="1" label="has_metadata"><attvalues><attvalue for="0" value="has_metadata"/></attvalues></edge>';
                             edges_xml += '<edge id="' + parseInt(row.owner_guid) + '_owns_metadata_' + parseInt(row.id) + '" source="' + parseInt(row.owner_guid) + '" target="meta_' + parseInt(row.id) + '" weight="1" label="owns_metadata"><attvalues><attvalue for="0" value="owns_metadata"/></attvalues></edge>';
+                            if(row.access_id != "0") edges_xml += '<edge id="meta_' + parseInt(row.id) + '_accessable_by_access_' + parseInt(row.access_id) + '" source="meta_' + parseInt(row.id) + '" target="access_' + parseInt(row.access_id) + '" label="accessable_by"><attvalues><attvalue for="0" value="accessable by"/></attvalues></edge>';
                             var edges_csv = '"' + parseInt(row.entity_guid) + '_has_metadata_' + parseInt(row.id) + '";"' + parseInt(row.entity_guid) + '";"meta_' + parseInt(row.id) + '";"directed";"has_metadata";"1";"has_metadata"\n';
                             edges_csv += '"' + parseInt(row.owner_guid) + '_owns_metadata_' + parseInt(row.id) + '";"' + parseInt(row.owner_guid) + '";"meta_' + parseInt(row.id) + '";"directed";"owns_metadata";"1";"owns_metadata"\n';
+                            if(row.access_id != "0") edges_csv += '"meta_' + parseInt(row.id) + '_accessable_by_access_' + parseInt(row.access_id) + '";"meta_' + parseInt(row.id) + '";"access_' + parseInt(row.access_id) + '";"directed";"accessable_by";"1.0";"accessable by"\n';
 
                             edges.write(edges_xml, 'utf-8', function () {
                                 csv_edges.write(edges_csv, 'utf-8', function () {
@@ -269,7 +275,7 @@ function resume() {
                 status.anno_edges = path_edges;
             });
 
-            var query = connection.query("SELECT `annotation`.`id`, `annotation`.`entity_guid`, `annotation`.`owner_guid`, `name`.`string` AS name, `value`.`string` as value FROM " + config.db.prefix + "annotations annotation LEFT JOIN " + config.db.prefix + "metastrings name ON `name`.`id`=`annotation`.`name_id` LEFT JOIN " + config.db.prefix + "metastrings value ON `value`.`id`=`annotation`.`value_id`");
+            var query = connection.query("SELECT `annotation`.`id`, `annotation`.`entity_guid`, `annotation`.`owner_guid`, `annotation`.`access_id`, `name`.`string` AS name, `value`.`string` as value FROM " + config.db.prefix + "annotations annotation LEFT JOIN " + config.db.prefix + "metastrings name ON `name`.`id`=`annotation`.`name_id` LEFT JOIN " + config.db.prefix + "metastrings value ON `value`.`id`=`annotation`.`value_id`");
             query
                 .on('error', function (err) {
                     throw err;
@@ -284,8 +290,10 @@ function resume() {
                         csv_nodes.write(node_csv, 'utf-8', function() {
                             var edges_xml = '<edge id="' + parseInt(row.entity_guid) + '_has_annotation_' + parseInt(row.id) + '" source="' + parseInt(row.entity_guid) + '" target="annotation_' + parseInt(row.id) + '" weight="1" label="has_annotation"><attvalues><attvalue for="0" value="has_annotation"/></attvalues></edge>';
                             edges_xml += '<edge id="' + parseInt(row.owner_guid) + '_owns_annotation_' + parseInt(row.id) + '" source="' + parseInt(row.owner_guid) + '" target="annotation_' + parseInt(row.id) + '" weight="1" label="owns_annotation"><attvalues><attvalue for="0" value="owns_annotation"/></attvalues></edge>';
+                            if(row.access_id != "0") edges_xml += '<edge id="annotation_' + parseInt(row.id) + '_accessable_by_access_' + parseInt(row.access_id) + '" source="annotation_' + parseInt(row.id) + '" target="access_' + parseInt(row.access_id) + '" label="accessable_by"><attvalues><attvalue for="0" value="accessable by"/></attvalues></edge>';
                             var edges_csv = '"' + parseInt(row.entity_guid) + '_has_annotation_' + parseInt(row.id) + '";"' + parseInt(row.entity_guid) + '";"annotation_' + parseInt(row.id) + '";"directed";"has_annotation";"1";"has_annotation"\n';
                             edges_csv += '"' + parseInt(row.owner_guid) + '_owns_annotation_' + parseInt(row.id) + '";"' + parseInt(row.owner_guid) + '";"annotation_' + parseInt(row.id) + '";"directed";"owns_annotation";"1";"owns_annotation"\n';
+                            if(row.access_id != "0") edges_csv += '"annotation_' + parseInt(row.id) + '_accessable_by_access_' + parseInt(row.access_id) + '";"annotation_' + parseInt(row.id) + '";"access_' + parseInt(row.access_id) + '";"directed";"accessable_by";"1.0";"accessable by"\n';
 
                             edges.write(edges_xml, 'utf-8', function () {
                                 csv_edges.write(edges_csv, 'utf-8', function () {
@@ -363,6 +371,86 @@ function resume() {
             .on('end', function () {
                 nodes.end();
             });
+    });
+
+    /**
+     * generate access collection nodes and edges
+     */
+    tmp.file(function _tempFileCreated(err, path_nodes, fd_nodes, cleanupCallback) {
+        var other_finished = false;
+
+        var nodes = fs.createWriteStream(null, {fd: fd_nodes});
+        nodes.on("finish", function() {
+            status.access_nodes = path_nodes;
+        });
+
+        tmp.file(function _tempFileCreated(err, path_edges, fd_edges, cleanupCallback) {
+            var edges = fs.createWriteStream(null, {fd: fd_edges});
+            edges.on("finish", function () {
+                status.access_edges = path_edges;
+            });
+
+            var query = connection.query("SELECT `id`, `name`, `owner_guid`, `site_guid` FROM `" + config.db.prefix + "access_collections`");
+            query
+                .on('error', function (err) {
+                    throw err;
+                })
+                .on('result', function (row) {
+                    connection.pause();
+
+                    var node_xml = '<node id="access_' + parseInt(row.id) + '" label="' + xmlescape(row.name) + '"><attvalues><attvalue for="0" value="access_collection"/><attvalue for="1" value="Access Collection"/></attvalues></node>';
+                    var node_csv = '"access_' + parseInt(row.id) + '";"' + row.name.replace('"', "''") + '";"access_collection";"Access Collection"\n';
+
+                    nodes.write(node_xml, 'utf-8', function () {
+                        csv_nodes.write(node_csv, 'utf-8', function() {
+                            var edges_xml = '<edge id="access_' + parseInt(row.id) + '_in_site_' + parseInt(row.site_guid) + '" source="access_' + parseInt(row.id) + '" target="' + parseInt(row.site_guid) + '" weight="1" label="in_site"><attvalues><attvalue for="0" value="in_site"/></attvalues></edge>';
+                            edges_xml += '<edge id="' + parseInt(row.owner_guid) + '_owns_access_' + parseInt(row.id) + '" source="' + parseInt(row.owner_guid) + '" target="access_' + parseInt(row.id) + '" weight="1" label="owns_access"><attvalues><attvalue for="0" value="owns_access"/></attvalues></edge>';
+                            var edges_csv = '"access_' + parseInt(row.id) + '_in_site_' + parseInt(row.site_guid) + '";"access_' + parseInt(row.id) + '";"' + parseInt(row.site_guid) + '";"directed";"in_site";"1";"in_site"\n';
+                            edges_csv += '"' + parseInt(row.owner_guid) + '_owns_access' + parseInt(row.id) + '";"' + parseInt(row.owner_guid) + '";"access_' + parseInt(row.id) + '";"directed";"owns_access";"1";"owns_access"\n';
+
+                            edges.write(edges_xml, 'utf-8', function () {
+                                csv_edges.write(edges_csv, 'utf-8', function () {
+                                    connection.resume();
+                                });
+                            });
+
+                        });
+                    });
+                })
+                .on('end', function () {
+                    if(other_finished) {
+                        edges.end();
+                    } else {
+                        other_finished = true;
+                    }
+                    nodes.end();
+                });
+            var query2 = connection.query("SELECT `user_guid`, `access_collection_id` FROM `" + config.db.prefix + "access_collection_membership`");
+            query2
+                .on('error', function (err) {
+                    throw err;
+                })
+                .on('result', function (row) {
+                    connection.pause();
+
+                    var edge_xml = '<edge id="' + parseInt(row.user_guid) + '_in_access_' + parseInt(row.access_collection_id) + '" source="' + parseInt(row.user_guid) + '" target="access_' + parseInt(row.access_collection_id) + '" weight="1" label="in_access_collection"><attvalues><attvalue for="0" value="in_access_collection"/></attvalues></edge>';
+                    var edge_csv = '"' + parseInt(row.user_guid) + '_in_access_' + parseInt(row.access_collection_id) + '";"' + parseInt(row.user_guid) + '";"access_' + parseInt(row.access_collection_id) + '";"directed";"in_access_collection";"1";"in_access_collection"\n';
+
+                    edges.write(edge_xml, 'utf-8', function () {
+                        csv_edges.write(edge_csv, 'utf-8', function () {
+                            connection.resume();
+                        });
+                    });
+                })
+                .on('end', function () {
+                    if(other_finished) {
+                        edges.end();
+                    } else {
+                        other_finished = true;
+                    }
+                    nodes.end();
+                });
+        });
     });
 }
 
