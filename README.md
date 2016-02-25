@@ -1,5 +1,6 @@
 # ELGG Graph Export
 Author: Karl Johann Schubert <mail@kjschubert.de>
+
 License: CC BY-SA 4.0
 
 ## Functionality
