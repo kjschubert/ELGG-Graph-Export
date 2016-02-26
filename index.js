@@ -320,7 +320,7 @@ function resume() {
             status.deadmeta = path;
         });
 
-        var query = connection.query("SELECT DISTINCT CONCAT('metadata_', `system_log`.`object_id`) AS id, `system_log`.`object_type` FROM " + config.db.prefix + "system_log system_log LEFT JOIN " + config.db.prefix + "metadata meta ON `system_log`.`object_id`=`meta`.`id` WHERE `meta`.`id` IS NULL AND `system_log`.`object_type`='metadata'");
+        var query = connection.query("SELECT DISTINCT CONCAT('meta_', `system_log`.`object_id`) AS id, `system_log`.`object_type` FROM " + config.db.prefix + "system_log system_log LEFT JOIN " + config.db.prefix + "metadata meta ON `system_log`.`object_id`=`meta`.`id` WHERE `meta`.`id` IS NULL AND `system_log`.`object_type`='metadata'");
         query
             .on('error', function (err) {
                 throw err;
