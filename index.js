@@ -328,8 +328,8 @@ function resume() {
             .on('result', function (row) {
                 connection.pause();
 
-                var node_xml = '<node id="' + xmlescape(row.id) + '" label="Deleted Metadata"><attvalues><attvalue for="0" value="metadata"/><attvalue for="1" value="This object was deleted and only found in the system log"/></attvalues></node>';
-                var node_csv = '"' + row.id.replace('"', "''") + '";"Deleted Metadata";"metadata";"This object was deleted and only found in the system log"\n';
+                var node_xml = '<node id="' + xmlescape(row.id) + '" label="Deleted Metadata"><attvalues><attvalue for="0" value="Metadata"/><attvalue for="1" value="This object was deleted and only found in the system log"/></attvalues></node>';
+                var node_csv = '"' + row.id.replace('"', "''") + '";"Deleted Metadata";"Metadata";"This object was deleted and only found in the system log"\n';
 
                 nodes.write(node_xml, 'utf-8', function () {
                     csv_nodes.write(node_csv, 'utf-8', function() {
